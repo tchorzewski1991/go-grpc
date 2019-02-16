@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package blog;
+option go_package="blogpb";
+
+import "google/api/annotations.proto";
+
+message Blog {
+    string id = 1;
+    string author_id = 2;
+    string title = 3;
+    string content = 4;
+}
+
+message CreateBlogRequest {
+    Blog blog = 1;
+}
+
+message CreateBlogResponse {
+    Blog blog = 1;
+}
+
+message ReadBlogRequest {
+    string blog_id = 1;
+}
+
+message ReadBlogResponse {
+    Blog blog = 1;
+}
+
+message ListBlogRequest {}
+
+message ListBlogResponse {
+    repeated Blog blogs = 1;
+}
+
+service BlogService {
+    rpc Create(CreateBlogRequest) returns (CreateBlogResponse) {
+        option (google.api.http) = {
+            post: "/blogs"
+            body: "blog"
+        };
+    }
+
+    rpc Read(ReadBlogRequest) returns (ReadBlogResponse) {
+        option (google.api.http) = {
+            get: "/blogs/{blog_id}"
+        };
+    }
+
+    rpc List(ListBlogRequest) returns (stream ListBlogResponse) {
+        option (google.api.http) = {
+            get: "/blogs"
+        };
+    }
+}
+
