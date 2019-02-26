@@ -57,13 +57,14 @@ func runHTTP(ctx context.Context) {
 	err := blogpb.RegisterBlogServiceHandlerFromEndpoint(ctx, mux, grpcAddr, dialOpts)
 	helpers.LogIfError(err, "Failed to connect with gRPC server: %v")
 
-	err = http.ListenAndServe(proxyAddr, withLogging(mux))
+	err = http.ListenAndServe(proxyAddr, httpLoggingMiddleware(mux))
 	helpers.LogIfError(err, "Failed to run proxy server: %v")
 
 	defer func() {
 		log.Println("Stopping HTTP Proxy server...")
 	}()
 }
+
 
 func runGrpc(ctx context.Context) {
 	port := ctx.Value("GRPC_SERVER_PORT").(string)
@@ -74,7 +75,7 @@ func runGrpc(ctx context.Context) {
 	listener, err := net.Listen("tcp", addr)
 	helpers.LogIfError(err, "Failed to connect tcp: %v")
 
-	server  := grpc.NewServer()
+	server  := grpc.NewServer(grpc.UnaryInterceptor(gRPCLoggingInterceptor))
 	repo    := blogRepo.NewMongoDbBlogRepo(dbClient.Mongo)
 	service := grpcService.NewBlogService(repo)
 
@@ -97,10 +98,30 @@ func setProperty(ctx context.Context, lookupKey string, defaultValue string) con
 	return context.WithValue(ctx, lookupKey, value)
 }
 
-func withLogging(inner *runtime.ServeMux) http.HandlerFunc {
+func httpLoggingMiddleware(inner *runtime.ServeMux) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+
 		inner.ServeHTTP(w, r)
-		log.Printf("HTTP | Method: %s\t%s\t%s", r.Method, r.RequestURI, time.Since(start))
+
+		log.Printf("HTTP | Method: %s | URI: %s | Duration: %s",
+			r.Method,
+			r.RequestURI,
+			time.Since(start))
 	}
+}
+
+func gRPCLoggingInterceptor(ctx context.Context, req interface{},
+	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+
+	start := time.Now()
+
+	resp, err = handler(ctx, req)
+
+	log.Printf("gRPC | Method: %s | Request: %v | Duration: %s",
+		info.FullMethod,
+		req,
+		time.Since(start))
+
+	return resp, err
 }
